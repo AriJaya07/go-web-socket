@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+    <title>Go WebSocket Chat</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f9;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        .chat-container {
+            width: 500px;
+            max-width: 100%;
+            background-color: white;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            border-radius: 8px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chat-header {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px;
+            text-align: center;
+        }
+
+        .chat-box {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            border-bottom: 1px solid #ddd;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chat-box .message {
+            margin-bottom: 10px;
+            padding: 10px;
+            border-radius: 5px;
+            max-width: 80%;
+        }
+
+        .chat-box .message.sent {
+            background-color: #dcf8c6;
+            align-self: flex-end;
+        }
+
+        .chat-box .message.received {
+            background-color: #f1f1f1;
+            align-self: flex-start;
+        }
+
+        .message .username {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .chat-input {
+            display: flex;
+            padding: 10px;
+            background-color: #f4f4f9;
+        }
+
+        .chat-input input[type="text"] {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            margin-right: 10px;
+        }
+
+        .chat-input button {
+            padding: 10px 20px;
+            border: none;
+            background-color: #4CAF50;
+            color: white;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .chat-input button:hover {
+            background-color: #45a049;
+        }
+    </style>
+</head>
+<body>
+    <div class="chat-container">
+        <div class="chat-header">
+            <h2>WebSocket Chat</h2>
+        </div>
+        <div id="chatbox" class="chat-box"></div>
+        <div class="chat-input">
+            <input type="text" id="username" placeholder="Your name" />
+            <input type="text" id="message" placeholder="Type your message..." />
+            <button onclick="sendMessage()">Send</button>
+        </div>
+    </div>
+
+    <script>
+        let socket = new WebSocket("ws://127.0.0.1:8080/ws");
+        let chatbox = document.getElementById("chatbox");
+        let messageInput = document.getElementById("message");
+        let usernameInput = document.getElementById("username");
+
+        // Generate a unique user ID for the current session
+        let userId = 'user_' + Math.random().toString(36).substr(2, 9);
+
+        console.log("Attempting Connection...");
+
+        socket.onopen = () => {
+            console.log("Successfully Connected");
+        };
+        
+        socket.onclose = event => {
+            console.log("Socket Closed Connection: ", event);
+        };
+
+        socket.onerror = error => {
+            console.log("Socket Error: ", error);
+        };
+
+        socket.onmessage = event => {
+            let data = JSON.parse(event.data);
+            let messageContent = data.message;
+            let messageType = data.type;
+            let username = data.username;
+            let senderId = data.userId;
+
+            // Only display the message if it's from a different sender
+            if (senderId !== userId) {
+                let message = document.createElement("div");
+                message.classList.add("message", "received");
+                message.innerHTML = `<div class="username">${username}:</div>${messageContent}`;
+                chatbox.appendChild(message);
+                chatbox.scrollTop = chatbox.scrollHeight;
+            }
+        };
+
+        function sendMessage() {
+            let message = messageInput.value;
+            let username = usernameInput.value || "Anonymous";
+            if (message) {
+                // Generate a unique ID for the message
+                let messageId = Date.now();
+                let messageData = JSON.stringify({
+                    id: messageId,
+                    message: message,
+                    type: "sent",
+                    username: username,
+                    userId: userId // Add the user ID to the message
+                });
+                socket.send(messageData);
+
+                let sentMessage = document.createElement("div");
+                sentMessage.classList.add("message", "sent");
+                sentMessage.innerHTML = `<div class="username">${username}:</div>${message}`;
+                chatbox.appendChild(sentMessage);
+                chatbox.scrollTop = chatbox.scrollHeight;
+                messageInput.value = "";
+            }
+        }
+    </script>
+</body>
+</html>
