@@ -6,19 +6,12 @@ import (
 	"net/http"
 
 	"github.com/AriJaya07/go-web-socket/config/db"
+	"github.com/AriJaya07/go-web-socket/types"
 	"github.com/gorilla/websocket"
 )
 
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool { return true },
-}
-
-type Message struct {
-	ID       int    `json:"id"`
-	Message  string `json:"message"`
-	Type     string `json:"type"`
-	Username string `json:"username"`
-	UserID   string `json:"userId"`
 }
 
 var clients = make(map[*websocket.Conn]bool)
@@ -32,6 +25,7 @@ func HandleConnection(w http.ResponseWriter, r *http.Request) {
 	}
 	defer conn.Close()
 
+	log.Println("Client Connected")
 	clients[conn] = true
 	defer delete(clients, conn)
 
@@ -41,7 +35,6 @@ func HandleConnection(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Error retrieving historical messages: %v", err)
 	} else {
 		for _, msg := range historicalMessages {
-			// Marshal Message struct to JSON
 			messageJSON, err := json.Marshal(msg)
 			if err != nil {
 				log.Printf("Error marshaling message to JSON: %v", err)
@@ -64,21 +57,20 @@ func HandleConnection(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 
-		var msgData Message
+		var msgData types.Message
 		if err := json.Unmarshal(msg, &msgData); err != nil {
 			log.Printf("Error while unmarshalling message: %v", err)
 			continue
 		}
 
 		// Store the message in the database
-		err = storage.SaveMessage(msgData.UserID, msgData.Username, msgData.Message)
+		err = storage.SaveMessage(msgData.UserID, msgData.Username, msgData.Message, msgData.CreatedAt)
 		if err != nil {
 			log.Printf("Error saving message to database: %v", err)
 		}
 
 		// Broadcast the message to all connected clients
 		for client := range clients {
-			// Marshal the message data to JSON
 			messageJSON, err := json.Marshal(msgData)
 			if err != nil {
 				log.Printf("Error marshaling message to JSON: %v", err)

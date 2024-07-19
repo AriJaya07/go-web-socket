@@ -2,8 +2,10 @@ package db
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/AriJaya07/go-web-socket/config"
 	"github.com/AriJaya07/go-web-socket/types"
@@ -31,6 +33,45 @@ func NewMySQLStorage(cfg config.Config) *MySQLStorage {
 	return &MySQLStorage{DB: db}
 }
 
+// GetHistoricalMessages retrieves historical chat messages from the database
+func (s *MySQLStorage) GetHistoricalMessages() ([]types.Message, error) {
+	rows, err := s.DB.Query(`
+		SELECT id, user_id, username, message, createdAt
+		FROM chat_messages
+		ORDER BY createdAt ASC
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var messages []types.Message
+	for rows.Next() {
+		var (
+			id        int
+			userID    string
+			username  string
+			message   string
+			createdAt time.Time
+		)
+		if err := rows.Scan(&id, &userID, &username, &message, &createdAt); err != nil {
+			return nil, err
+		}
+
+		// Unmarshal the JSON message field
+		var msg types.Message
+		if err := json.Unmarshal([]byte(message), &msg); err != nil {
+			return nil, err
+		}
+		msg.Id = id
+		msg.CreatedAt = createdAt
+
+		messages = append(messages, msg)
+	}
+
+	return messages, nil
+}
+
 func (s *MySQLStorage) Init() (*sql.DB, error) {
 	// initialize the tables
 	if err := s.createUserTable(); err != nil {
@@ -44,11 +85,11 @@ func (s *MySQLStorage) Init() (*sql.DB, error) {
 }
 
 // SaveMessage stores a chat message in the database
-func (s *MySQLStorage) SaveMessage(userID, username, message string) error {
+func (s *MySQLStorage) SaveMessage(userID, username, message string, createdAt time.Time) error {
 	_, err := s.DB.Exec(`
-		INSERT INTO chat_messages (user_id, username, message)
-		VALUES (?, ?, ?)
-	`, userID, username, message)
+		INSERT INTO chat_messages (user_id, username, message, createdAt)
+		VALUES (?, ?, ?, ?)
+	`, userID, username, message, createdAt)
 	return err
 }
 
@@ -84,28 +125,4 @@ func (s *MySQLStorage) createTableChatMessage() error {
 	`)
 
 	return err
-}
-
-// GetHistoricalMessages retrieves historical chat messages from the database
-func (s *MySQLStorage) GetHistoricalMessages() ([]types.Message, error) {
-	rows, err := s.DB.Query(`
-		SELECT user_id, username, message, createdAt
-		FROM chat_messages
-		ORDER BY createdAt ASC
-	`)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var messages []types.Message
-	for rows.Next() {
-		var msg types.Message
-		if err := rows.Scan(&msg.UserID, &msg.Username, &msg.Body, &msg.CreatedAt); err != nil {
-			return nil, err
-		}
-		messages = append(messages, msg)
-	}
-
-	return messages, nil
 }
