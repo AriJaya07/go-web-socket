@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/AriJaya07/go-web-socket/config/db"
 	"github.com/gorilla/websocket"
 )
 
@@ -21,6 +22,7 @@ type Message struct {
 }
 
 var clients = make(map[*websocket.Conn]bool)
+var storage *db.MySQLStorage
 
 func HandleConnection(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
@@ -32,6 +34,28 @@ func HandleConnection(w http.ResponseWriter, r *http.Request) {
 
 	clients[conn] = true
 	defer delete(clients, conn)
+
+	// Send historical messages to the new client
+	historicalMessages, err := storage.GetHistoricalMessages()
+	if err != nil {
+		log.Printf("Error retrieving historical messages: %v", err)
+	} else {
+		for _, msg := range historicalMessages {
+			// Marshal Message struct to JSON
+			messageJSON, err := json.Marshal(msg)
+			if err != nil {
+				log.Printf("Error marshaling message to JSON: %v", err)
+				continue
+			}
+
+			err = conn.WriteMessage(websocket.TextMessage, messageJSON)
+			if err != nil {
+				log.Printf("Error sending historical message: %v", err)
+				conn.Close()
+				return
+			}
+		}
+	}
 
 	for {
 		messageType, msg, err := conn.ReadMessage()
@@ -46,8 +70,22 @@ func HandleConnection(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
+		// Store the message in the database
+		err = storage.SaveMessage(msgData.UserID, msgData.Username, msgData.Message)
+		if err != nil {
+			log.Printf("Error saving message to database: %v", err)
+		}
+
+		// Broadcast the message to all connected clients
 		for client := range clients {
-			if err := client.WriteMessage(messageType, msg); err != nil {
+			// Marshal the message data to JSON
+			messageJSON, err := json.Marshal(msgData)
+			if err != nil {
+				log.Printf("Error marshaling message to JSON: %v", err)
+				continue
+			}
+
+			if err := client.WriteMessage(messageType, messageJSON); err != nil {
 				log.Printf("Error while writing message: %v", err)
 				client.Close()
 				delete(clients, client)

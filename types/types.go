@@ -6,8 +6,10 @@ type User struct {
 	Email    string `json:"email"`
 }
 
+// Message represents a chat message
 type Message struct {
-	MessageType int    `json:"messageType"`
-	Body        string `json:"body"`
-	Username    string `json:"username"`
+	UserID    string `json:"userId"`
+	Username  string `json:"username"`
+	Body      string `json:"message"`
+	CreatedAt string `json:"createdAt"` // Adjust type as needed
 }
