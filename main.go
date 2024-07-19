@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/AriJaya07/go-web-socket/config"
 	"github.com/AriJaya07/go-web-socket/config/db"
@@ -111,6 +112,18 @@ func main() {
 	if err != nil {
 		log.Fatalf("Error initializing database: %v", err)
 	}
+
+	// Start a goroutine to run the cleanup task every day
+	go func() {
+		for {
+			time.Sleep(24 * time.Hour) // Wait for one day
+			if err := storage.DeleteOldMessages(); err != nil {
+				log.Printf("Error deleting old messages: %v", err)
+			} else {
+				log.Println("Old messages deleted successfully")
+			}
+		}
+	}()
 
 	go handleMessages()
 	setupRoutes()

@@ -72,6 +72,14 @@ func (s *MySQLStorage) GetHistoricalMessages() ([]types.Message, error) {
 	return messages, nil
 }
 
+func (s *MySQLStorage) DeleteOldMessages() error {
+	_, err := s.DB.Exec(`
+		DELETE FROM chat_messages
+		WHERE createdAt < NOW() - INTERVAL 30 DAY
+	`)
+	return err
+}
+
 func (s *MySQLStorage) Init() (*sql.DB, error) {
 	// initialize the tables
 	if err := s.createUserTable(); err != nil {
